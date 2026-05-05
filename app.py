@@ -31,9 +31,9 @@ def generate_pdf(row):
     # 3. Center Titles
     pdf.set_y(15)
     pdf.set_font("Arial", 'B', 16)
-    pdf.cell(0, 10, txt="RAJASTHAN", ln=True, align='C') # Updated Heading
+    pdf.cell(0, 10, txt="TRANSIT PASS STATUS", ln=True, align='C') # Updated Heading
     pdf.set_font("Arial", 'B', 11)
-    pdf.cell(0, 8, txt="DEPARTMENT OF MINING & GEOLOGY", ln=True, align='C')
+    pdf.cell(0, 8, txt="RAJASTHAN", ln=True, align='C')
     
     pdf.ln(10)
     pdf.set_fill_color(240, 240, 240)
@@ -46,6 +46,8 @@ def generate_pdf(row):
         ('Generated on', 'Date & Time of Confirmation'),
         ('Source Name', 'Source Name'),
         ('Mineral', 'Mineral Type'),
+        ('Consignee Name', 'Consignee Name'),
+        ('Consignee Address', 'Consignee Address')
         ('Net Mineral Weight', 'Net Mineral Weight'),
         ('Vehicle No', 'Vehicle No')
     ]
