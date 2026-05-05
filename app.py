@@ -32,8 +32,8 @@ def generate_pdf(row):
     pdf.rect(5, 5, 200, 287) # Border
 
     # Header Left: Logo
-    if os.path.exists('logo.png'):
-        pdf.image('logo.png', x=10, y=10, w=25)
+    if os.path.exists('logo.jpeg'):
+        pdf.image('logo.jpeg', x=10, y=10, w=25)
     
     # Header Right: QR Code
     if os.path.exists(qr_path):
