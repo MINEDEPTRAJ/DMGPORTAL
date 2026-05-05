@@ -27,11 +27,6 @@ def generate_pdf(row):
     
     # 1. Outer Border
     pdf.rect(5, 5, 200, 287) 
-
-    # 2. Left Side Logo (GitHub par uploaded file ka naam)
-    logo_path = "logo.jpeg"
-    if os.path.exists(logo_path):
-        pdf.image(logo_path, x=10, y=10, w=25) 
     
     # 3. Header Text
     pdf.set_font("Arial", 'B', 12)
