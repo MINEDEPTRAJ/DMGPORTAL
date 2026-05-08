@@ -150,7 +150,7 @@ def index():
     <div class="card">
         <div class="header">
             <h2>RAJASTHAN</h2>
-            <p>Mining & Geology Department</p>
+            <p>GEOMINEDEP</p>
         </div>
         
         <form method="post">
@@ -184,7 +184,7 @@ def index():
 
         <div class="footer">
             {{ disclaimer }}<br>
-            © 2026 DMG Rajasthan Portal. All Rights Reserved.
+            © 2026 All Rights Reserved.
         </div>
     </div>
 </body>
