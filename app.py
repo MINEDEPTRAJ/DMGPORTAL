@@ -1,10 +1,15 @@
-import pandas as pd
+import os
 import json
-from flask import Flask, render_template_string, request, os
+import pandas as pd
+import qrcode
+from fpdf import FPDF
+from flask import Flask, render_template_string, request, send_file, jsonify
 
 app = Flask(__name__)
 
-# --- COMPLETE DATA FROM EXCEL ---
+DISCLAIMER = "Note: This is a private verification portal. Not an official Government website."
+
+# --- DISTRICT DATA ---
 DISTRICT_DATA = {
     "Ajmer": {"major": 467, "minor": 440, "quarry": 91, "stp": 368, "rawanna": 26920, "transit": 22012, "revenue": 14.33, "dmf": 5.03},
     "Alwar": {"major": 3, "minor": 321, "quarry": 0, "stp": 106, "rawanna": 25770, "transit": 14546, "revenue": 10.26, "dmf": 0.52},
@@ -46,112 +51,183 @@ DISTRICT_DATA = {
     "Udaipur": {"major": 643, "minor": 196, "quarry": 3, "stp": 75, "rawanna": 15309, "transit": 4697, "revenue": 18.06, "dmf": 3.42}
 }
 
-RAJASTHAN_TOTAL = {"major": 3003, "minor": 13800, "quarry": 12396, "stp": 3515, "rawanna": 1062754, "transit": 508391, "revenue": 673.42, "dmf": 135.31}
+# --- VERIFICATION CONFIG ---
+COLUMNS_TO_SHOW = [
+    ('Transit Pass No', 'Rawana No'),
+    ('Generated on', 'Date & Time of Confirmation'),
+    ('Source Name', 'Source Name'),
+    ('Location', 'Location'),
+    ('Mineral', 'Mineral Type'),
+    ('Net Mineral Weight', 'Net Mineral Weight'),
+    ('Consignee Name', 'Consignee Name'),
+    ('Consignee Address', 'Consignee Address')
+]
 
-@app.route('/')
+def mask_consignee_name(name):
+    if not isinstance(name, str) or not name.strip() or len(name) <= 1:
+        return name
+    return name[0] + "".join([" " if char == " " else "X" for char in name[1:-1]]) + name[-1]
+
+def generate_pdf(row):
+    qr_text = f"TP No: {row['Rawana No']}\nDate: {row['Date & Time of Confirmation']}"
+    qr_img = qrcode.make(qr_text); qr_path = "temp_qr.png"; qr_img.save(qr_path)
+    pdf = FPDF(); pdf.add_page(); pdf.rect(5, 5, 200, 287)
+    if os.path.exists('logo.jpeg'): pdf.image('logo.jpeg', x=10, y=10, w=25)
+    if os.path.exists(qr_path): pdf.image(qr_path, x=170, y=10, w=25)
+    pdf.set_y(15); pdf.set_font("Arial", 'B', 16); pdf.cell(0, 10, txt="RAJASTHAN", ln=True, align='C')
+    pdf.set_font("Arial", 'B', 11); pdf.cell(0, 8, txt="DEPARTMENT OF MINING & GEOLOGY", ln=True, align='C')
+    pdf.ln(10); pdf.set_fill_color(240, 240, 240); pdf.set_font("Arial", 'B', 12); pdf.cell(0, 10, txt="TRANSIT PASS STATUS", border=1, ln=True, align='C', fill=True)
+    pdf.set_font("Arial", '', 10)
+    for label, key in COLUMNS_TO_SHOW:
+        val = str(row.get(key, 'N/A'))
+        pdf.set_font("Arial", 'B', 10); pdf.cell(70, 9, txt=f" {label}", border=1)
+        pdf.set_font("Arial", '', 10); pdf.cell(120, 9, txt=f" {val}", border=1, ln=True)
+    output_name = f"TransitPass_{row['Rawana No']}.pdf"; pdf.output(output_name); return output_name
+
+@app.route('/', methods=['GET', 'POST'])
 def index():
+    data = None; error_msg = ""
+    if request.method == 'POST':
+        royalty_no = request.form.get('royalty_no')
+        download = request.form.get('download')
+        file_path = 'data.xlsx'
+        if os.path.exists(file_path):
+            try:
+                df = pd.read_excel(file_path)
+                match = df[df['Rawana No'].astype(str) == str(royalty_no)]
+                if not match.empty:
+                    row = match.iloc[0].copy()
+                    if 'Consignee Name' in row: row['Consignee Name'] = mask_consignee_name(str(row['Consignee Name']))
+                    if download == "true":
+                        pdf_file = generate_pdf(row); return send_file(pdf_file, as_attachment=True)
+                    data = row.to_dict()
+                else: error_msg = f"Record not found for: {royalty_no}"
+            except Exception as e: error_msg = f"Error: {str(e)}"
+        else: error_msg = "Database file (data.xlsx) missing."
+
     html_content = '''
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DMG Rajasthan - Dashboard</title>
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DMG Rajasthan Portal</title>
     <style>
-        body { font-family: Arial, sans-serif; background: #f0f4f7; margin: 0; }
-        .nav { background: #003366; color: white; padding: 15px; text-align: center; font-weight: bold; }
-        .container { max-width: 1200px; margin: 20px auto; padding: 0 20px; }
+        body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #f0f4f7; margin: 0; }
+        .nav { background: #003366; color: white; padding: 15px; text-align: center; font-weight: bold; display: flex; justify-content: space-between; align-items: center; padding: 10px 20px; }
+        .switch-btn { background: #ff9800; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; font-weight: bold; }
+        .container { max-width: 1100px; margin: 20px auto; padding: 0 20px; }
+        .card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); margin-bottom: 20px; }
         
-        .slide { background: #008080; color: white; border-radius: 12px; padding: 25px; margin-bottom: 25px; box-shadow: 0 8px 16px rgba(0,0,0,0.1); }
-        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-top: 15px; }
-        .stat-card { background: rgba(255,255,255,0.2); padding: 12px; border-radius: 6px; text-align: center; border: 1px solid rgba(255,255,255,0.3); }
-        .stat-card span { display: block; font-size: 11px; text-transform: uppercase; }
-        .stat-card b { font-size: 20px; }
-
-        .visual-container { display: flex; gap: 20px; margin-bottom: 25px; flex-wrap: wrap; }
-        .visual-card { background: white; border-radius: 12px; padding: 15px; flex: 1; min-width: 45%; text-align: center; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
-        .visual-card img { width: 100%; border-radius: 5px; max-height: 500px; object-fit: contain; }
+        /* Dashboard Styles */
+        .slide { background: #008080; color: white; border-radius: 12px; padding: 20px; margin-bottom: 20px; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-top: 15px; }
+        .stat-box { background: rgba(255,255,255,0.2); padding: 10px; border-radius: 6px; text-align: center; border: 1px solid rgba(255,255,255,0.3); }
+        .stat-box span { font-size: 11px; display: block; text-transform: uppercase; }
+        .stat-box b { font-size: 18px; }
         
-        .select-dist { background: #004d4d; color: white; padding: 10px; border-radius: 5px; font-size: 16px; margin-bottom: 15px; width: 100%; max-width: 300px; }
+        /* Verification Styles */
+        .v-input { width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 16px; margin-bottom: 15px; box-sizing: border-box; }
+        .btn-blue { background: #2980b9; color: white; border: none; width: 100%; padding: 12px; border-radius: 8px; font-weight: bold; cursor: pointer; }
+        .table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        .table td { padding: 10px; border: 1px solid #eee; font-size: 14px; }
+        .label { background: #f8f9fa; font-weight: bold; width: 40%; }
+        
+        .hidden { display: none; }
     </style>
 </head>
 <body>
-
-<div class="nav">MINES & GEOLOGY DEPARTMENT - RAJASTHAN</div>
+<div class="nav">
+    <span>MINES & GEOLOGY DEPARTMENT</span>
+    <button class="switch-btn" onclick="toggleInterface()">🔄 Switch Interface</button>
+</div>
 
 <div class="container">
-
-    <div class="slide">
-        <h2 style="margin:0;">RAJASTHAN (TOTAL)</h2>
-        <div class="stats-grid">
-            <div class="stat-card"><span>Major Leases</span><b>3003</b></div>
-            <div class="stat-card"><span>Minor Leases</span><b>13800</b></div>
-            <div class="stat-card"><span>Quarry Licence</span><b>12396</b></div>
-            <div class="stat-card"><span>STP/Permits</span><b>3515</b></div>
-            <div class="stat-card"><span>E-Rawanna</span><b>10,62,754</b></div>
-            <div class="stat-card"><span>E-Transit Pass</span><b>5,08,391</b></div>
-            <div class="stat-card"><span>Revenue (Cr)</span><b>673.42</b></div>
-            <div class="stat-card"><span>DMF (Cr)</span><b>135.31</b></div>
+    <div id="dashboard-ui">
+        <div class="slide">
+            <h2 style="margin:0;">RAJASTHAN STATE OVERVIEW</h2>
+            <div class="stats-grid">
+                <div class="stat-box"><span>Major Leases</span><b>3003</b></div>
+                <div class="stat-box"><span>Minor Leases</span><b>13800</b></div>
+                <div class="stat-box"><span>Rawanna</span><b>10.6L</b></div>
+                <div class="stat-box"><span>Revenue</span><b>673.4Cr</b></div>
+            </div>
+        </div>
+        <div class="card">
+            <h3>District Specific Data</h3>
+            <select style="width:100%; padding:10px;" id="distSelect" onchange="updateDistStats()">
+                {% for dist in dist_list %}<option value="{{ dist }}">{{ dist }}</option>{% endfor %}
+            </select>
+            <div class="stats-grid" id="distDisplay" style="color: #333; margin-top:20px;"></div>
         </div>
     </div>
 
-    <div class="visual-container">
-        <div class="visual-card">
-            <h3 style="color:#003366;">DISTRIBUTION MAP</h3>
-            <img src="/static/rajasthan_map.png" alt="Map">
-        </div>
-        <div class="visual-card">
-            <h3 style="color:#003366;">DMF COLLECTION ANALYSIS</h3>
-            <img src="/static/dmf_graph.png" alt="Graph">
-        </div>
-    </div>
-
-    <div class="slide" style="background:#005a5a;">
-        <h2 style="margin:0 0 15px 0;">DISTRICT WISE DASHBOARD</h2>
-        <select class="select-dist" id="distSelect" onchange="updateStats()">
-            {% for dist in dist_list %}
-            <option value="{{ dist }}">{{ dist }}</option>
-            {% endfor %}
-        </select>
-        
-        <div class="stats-grid" id="districtStats">
-            <div class="stat-card"><span>Major Leases</span><b>643</b></div>
-            <div class="stat-card"><span>Minor Leases</span><b>196</b></div>
-            <div class="stat-card"><span>Quarry Licence</span><b>3</b></div>
-            <div class="stat-card"><span>STP/Permits</span><b>75</b></div>
-            <div class="stat-card"><span>E-Rawanna</span><b>15309</b></div>
-            <div class="stat-card"><span>E-Transit Pass</span><b>4697</b></div>
-            <div class="stat-card"><span>Revenue (Cr)</span><b>18.06</b></div>
-            <div class="stat-card"><span>DMF (Cr)</span><b>3.42</b></div>
+    <div id="verification-ui" class="hidden">
+        <div class="card">
+            <h2 style="text-align:center; color:#2c3e50;">Transit Pass Verification</h2>
+            <form method="post">
+                <input type="text" class="v-input" name="royalty_no" placeholder="Enter TP No (e.g. 2024...)" required>
+                <button type="submit" class="btn-blue">Verify Now</button>
+            </form>
+            
+            {% if error %}<div style="color:red; text-align:center; margin-top:10px;">{{ error }}</div>{% endif %}
+            
+            {% if data %}
+            <div style="margin-top:20px;">
+                <table class="table">
+                    {% for label, key in columns %}
+                    <tr><td class="label">{{ label }}</td><td>{{ data[key] }}</td></tr>
+                    {% endfor %}
+                </table>
+                <form method="post">
+                    <input type="hidden" name="royalty_no" value="{{ data['Rawana No'] }}">
+                    <input type="hidden" name="download" value="true">
+                    <button type="submit" style="background:#27ae60;" class="btn-blue">⬇️ Download PDF</button>
+                </form>
+            </div>
+            {% endif %}
         </div>
     </div>
-
+    
+    <div style="text-align:center; font-size:12px; color:#95a5a6; margin-top:20px;">{{ disclaimer }}</div>
 </div>
 
 <script>
     const allData = {{ json_data | safe }};
-    function updateStats() {
+    
+    function toggleInterface() {
+        const d = document.getElementById('dashboard-ui');
+        const v = document.getElementById('verification-ui');
+        d.classList.toggle('hidden');
+        v.classList.toggle('hidden');
+    }
+
+    function updateDistStats() {
         const d = document.getElementById('distSelect').value;
         const s = allData[d];
-        document.getElementById('districtStats').innerHTML = `
-            <div class="stat-card"><span>Major Leases</span><b>${s.major}</b></div>
-            <div class="stat-card"><span>Minor Leases</span><b>${s.minor}</b></div>
-            <div class="stat-card"><span>Quarry Licence</span><b>${s.quarry}</b></div>
-            <div class="stat-card"><span>STP/Permits</span><b>${s.stp}</b></div>
-            <div class="stat-card"><span>E-Rawanna</span><b>${s.rawanna}</b></div>
-            <div class="stat-card"><span>E-Transit Pass</span><b>${s.transit}</b></div>
-            <div class="stat-card"><span>Revenue (Cr)</span><b>${s.revenue}</b></div>
-            <div class="stat-card"><span>DMF (Cr)</span><b>${s.dmf}</b></div>
+        if(!s) return;
+        document.getElementById('distDisplay').innerHTML = `
+            <div class="stat-box" style="background:#f1f1f1"><span>Major</span><b>${s.major}</b></div>
+            <div class="stat-box" style="background:#f1f1f1"><span>Minor</span><b>${s.minor}</b></div>
+            <div class="stat-box" style="background:#f1f1f1"><span>Revenue</span><b>${s.revenue}Cr</b></div>
+            <div class="stat-box" style="background:#f1f1f1"><span>DMF</span><b>${s.dmf}Cr</b></div>
         `;
     }
-</script>
 
+    // Preserve UI state after post
+    window.onload = function() {
+        {% if data or error %}
+            toggleInterface();
+        {% endif %}
+        updateDistStats();
+    };
+</script>
 </body>
 </html>
 '''
-    return render_template_string(html_content, 
-                                 dist_list=sorted(DISTRICT_DATA.keys()), 
+    return render_template_string(html_content, data=data, error=error_msg, disclaimer=DISCLAIMER, 
+                                 columns=COLUMNS_TO_SHOW, dist_list=sorted(DISTRICT_DATA.keys()), 
                                  json_data=json.dumps(DISTRICT_DATA))
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)
