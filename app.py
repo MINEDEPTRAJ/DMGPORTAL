@@ -122,7 +122,7 @@ def index():
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Royalty Portal - Rajasthan</title>
+    <title>GMDRAJSER</title>
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #eef2f3; margin: 0; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
         .card { background: white; padding: 40px; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); width: 100%; max-width: 550px; border-top: 5px solid #2980b9; margin: 20px; }
