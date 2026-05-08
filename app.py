@@ -57,7 +57,7 @@ def index():
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DMG Portal Style</title>
+    <title>GMDRAJASTHAN</title>
     <style>
         body { font-family: Arial, sans-serif; background-color: #f0f4f7; margin: 0; padding: 0; }
         .top-nav { background: #003366; color: white; padding: 10px 20px; text-align: center; font-weight: bold; }
@@ -79,7 +79,7 @@ def index():
     </style>
 </head>
 <body>
-    <div class="top-nav">DEPARTMENT OF MINES & GEOLOGY</div>
+    <div class="top-nav">GEOMINEDEP</div>
     
     <div class="dashboard-header">
         <div class="stats-container">
