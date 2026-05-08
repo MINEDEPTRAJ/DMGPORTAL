@@ -8,7 +8,7 @@ app = Flask(__name__)
 
 DISCLAIMER = "Note: This is a private verification portal. Not an official Government website."
 
-# Yahan se 'Vehicle No' hata diya gaya hai taaki View aur Download me na dikhe
+# Vehicle No ko list se hata diya gaya hai
 COLUMNS_TO_SHOW = [
     ('Transit Pass No', 'Rawana No'),
     ('Generated on', 'Date & Time of Confirmation'),
@@ -21,24 +21,31 @@ COLUMNS_TO_SHOW = [
 ]
 
 def mask_consignee_name(name):
-    """Har word ka pehla aur aakhri letter dikhayega, baaki X"""
+    """
+    Example: 'SHRI KRISHNA' -> 'SXXX XXXXXXXA'
+    Example: 'AAI MAA CONSTRUCTION' -> 'AXX XXX XXXXXXXXXXXN'
+    """
     if not isinstance(name, str) or not name.strip():
         return name
     
-    words = name.split()
-    masked_words = []
-    for word in words:
-        if len(word) > 2:
-            masked_word = word[0] + ("X" * (len(word) - 2)) + word[-1]
-        elif len(word) == 2:
-            masked_word = word[0] + "X"
+    name = name.strip()
+    if len(name) <= 1:
+        return name
+        
+    first_char = name[0]
+    last_char = name[-1]
+    
+    middle_part = ""
+    for char in name[1:-1]:
+        if char == " ":
+            middle_part += " "
         else:
-            masked_word = word
-        masked_words.append(masked_word)
-    return " ".join(masked_words)
+            middle_part += "X"
+            
+    return first_char + middle_part + last_char
 
 def generate_pdf(row):
-    # QR Code me bhi Vehicle No hide kar diya hai safety ke liye
+    # QR Code generation
     qr_text = f"TP No: {row['Rawana No']}\nDate: {row['Date & Time of Confirmation']}"
     qr_img = qrcode.make(qr_text)
     qr_path = "temp_qr.png"
@@ -46,7 +53,7 @@ def generate_pdf(row):
 
     pdf = FPDF()
     pdf.add_page()
-    pdf.rect(5, 5, 200, 287) # Border
+    pdf.rect(5, 5, 200, 287) 
 
     if os.path.exists('logo.jpeg'):
         pdf.image('logo.jpeg', x=10, y=10, w=25)
@@ -65,7 +72,6 @@ def generate_pdf(row):
     pdf.set_font("Arial", 'B', 12)
     pdf.cell(0, 10, txt="TRANSIT PASS STATUS", border=1, ln=True, align='C', fill=True)
 
-    # Data Table - Isme masked data hi aayega
     pdf.set_font("Arial", '', 10)
     for label, key in COLUMNS_TO_SHOW:
         val = str(row.get(key, 'N/A'))
@@ -94,9 +100,7 @@ def index():
                 match = df[df['Rawana No'].astype(str) == str(royalty_no)]
                 
                 if not match.empty:
-                    row = match.iloc[0].copy() # Original row ki copy
-                    
-                    # Consignee Name ko Mask karna (View aur PDF dono ke liye)
+                    row = match.iloc[0].copy()
                     if 'Consignee Name' in row:
                         row['Consignee Name'] = mask_consignee_name(str(row['Consignee Name']))
                     
@@ -110,50 +114,78 @@ def index():
             except Exception as e:
                 error_msg = f"Error: {str(e)}"
         else:
-            error_msg = "data.xlsx not found."
+            error_msg = "Database file (data.xlsx) missing."
 
-    # HTML content wahi rakha hai jo aapne diya tha
     html_content = '''
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Royalty Portal</title>
+    <title>Royalty Portal - Rajasthan</title>
     <style>
-        body { font-family: sans-serif; background: #f4f7f6; padding: 20px; display: flex; justify-content: center; }
-        .card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 100%; max-width: 600px; }
-        .header { text-align: center; border-bottom: 2px solid #2980b9; margin-bottom: 20px; }
-        input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; }
-        .btn { width: 100%; padding: 12px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; }
-        .btn-view { background: #2980b9; color: white; }
-        .btn-down { background: #27ae60; color: white; margin-top: 20px; }
-        .table { width: 100%; margin-top: 15px; border-collapse: collapse; font-size: 14px; }
-        .table td { padding: 10px; border: 1px solid #eee; }
-        .label { font-weight: bold; background: #f9f9f9; width: 40%; }
-        .footer { font-size: 10px; text-align: center; color: #999; margin-top: 30px; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #eef2f3; margin: 0; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+        .card { background: white; padding: 40px; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); width: 100%; max-width: 550px; border-top: 5px solid #2980b9; margin: 20px; }
+        .header { text-align: center; margin-bottom: 30px; }
+        .header h2 { color: #2c3e50; margin: 0; letter-spacing: 2px; text-transform: uppercase; }
+        .header p { color: #7f8c8d; margin: 5px 0; font-weight: 500; }
+        .input-group { margin-bottom: 20px; }
+        input[type="text"] { width: 100%; padding: 14px; border: 2px solid #ddd; border-radius: 8px; font-size: 16px; transition: border-color 0.3s; box-sizing: border-box; }
+        input[type="text"]:focus { border-color: #2980b9; outline: none; }
+        .btn { width: 100%; padding: 14px; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: bold; transition: background 0.3s; }
+        .btn-view { background: #2980b9; color: white; margin-top: 10px; }
+        .btn-view:hover { background: #1f6391; }
+        .btn-down { background: #27ae60; color: white; margin-top: 25px; }
+        .btn-down:hover { background: #219150; }
+        .error { color: #e74c3c; background: #fdeaea; padding: 12px; border-radius: 5px; text-align: center; margin-top: 15px; font-size: 14px; border: 1px solid #f5c2c2; }
+        .table-container { margin-top: 30px; border: 1px solid #eee; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .table { width: 100%; border-collapse: collapse; background: #fff; }
+        .table td { padding: 12px 15px; border-bottom: 1px solid #f1f1f1; font-size: 14px; }
+        .label { background: #f8f9fa; color: #34495e; font-weight: 600; width: 45%; }
+        .value { color: #2c3e50; }
+        .footer { font-size: 11px; text-align: center; color: #95a5a6; margin-top: 40px; line-height: 1.5; border-top: 1px solid #eee; padding-top: 15px; }
     </style>
 </head>
 <body>
     <div class="card">
-        <div class="header"><h2>RAJASTHAN</h2><p>Mining & Geology Department</p></div>
+        <div class="header">
+            <h2>RAJASTHAN</h2>
+            <p>Mining & Geology Department</p>
+        </div>
+        
         <form method="post">
-            <input type="text" name="royalty_no" placeholder="Enter Transit Pass No..." required>
+            <div class="input-group">
+                <input type="text" name="royalty_no" placeholder="Enter Transit Pass No..." required autofocus autocomplete="off">
+            </div>
             <button type="submit" class="btn btn-view">Check Status</button>
         </form>
-        {% if error %} <p style="color:red; text-align:center;">{{ error }}</p> {% endif %}
+
+        {% if error %}
+            <div class="error">⚠️ {{ error }}</div>
+        {% endif %}
+
         {% if data %}
-        <table class="table">
-            {% for label, key in columns %}
-            <tr><td class="label">{{ label }}</td><td>{{ data[key] }}</td></tr>
-            {% endfor %}
-        </table>
+        <div class="table-container">
+            <table class="table">
+                {% for label, key in columns %}
+                <tr>
+                    <td class="label">{{ label }}</td>
+                    <td class="value">{{ data[key] }}</td>
+                </tr>
+                {% endfor %}
+            </table>
+        </div>
         <form method="post">
             <input type="hidden" name="royalty_no" value="{{ data['Rawana No'] }}">
             <input type="hidden" name="download" value="true">
-            <button type="submit" class="btn btn-down">Download PDF Receipt</button>
+            <button type="submit" class="btn btn-down">⬇️ Download PDF Receipt</button>
         </form>
         {% endif %}
-        <div class="footer">{{ disclaimer }}</div>
+
+        <div class="footer">
+            {{ disclaimer }}<br>
+            © 2026 DMG Rajasthan Portal. All Rights Reserved.
+        </div>
     </div>
 </body>
 </html>
