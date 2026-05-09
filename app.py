@@ -1,7 +1,7 @@
 import pandas as pd
 import qrcode
 from fpdf import FPDF
-from flask import Flask, render_template_string, request, send_file
+from flask import Flask, render_template_string, request, send_file, send_from_directory
 import os
 
 app = Flask(__name__)
@@ -195,3 +195,13 @@ def index():
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
+    # ... aapka baaki purana code ...
+
+# Naya code yahan paste karein
+@app.route('/sitemap.xml')
+def static_from_root():
+    return send_from_directory(os.getcwd(), 'sitemap.xml')
+
+# Ye hamesha sabse aakhiri mein hona chahiye
+if __name__ == "__main__":
+    app.run()
